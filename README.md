@@ -1,6 +1,9 @@
 Google Font CLI
 =============
 
+> [!NOTE]  
+> I am moving the repository from [tinsever/google-font-cli](https://github.com/tinsever/google-font-cli) to here. This could take some time.
+
 [![npm version](https://img.shields.io/npm/v/google-font-cli.svg)](https://www.npmjs.com/package/google-font-cli)
 [![GitHub stars](https://img.shields.io/github/stars/tinsever/google-font-cli.svg)](https://github.com/tinsever/google-font-cli/stargazers)
 [![Downloads](https://img.shields.io/npm/dm/google-font-cli.svg)](https://www.npmjs.com/package/google-font-cli)
