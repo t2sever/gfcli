@@ -5,7 +5,7 @@ Google Font CLI
 > I am moving the repository from [tinsever/google-font-cli](https://github.com/tinsever/google-font-cli) to here. This could take some time.
 
 [![npm version](https://img.shields.io/npm/v/google-font-cli.svg)](https://www.npmjs.com/package/google-font-cli)
-[![GitHub stars](https://img.shields.io/github/stars/tinsever/google-font-cli.svg)](https://github.com/tinsever/google-font-cli/stargazers)
+[![GitHub stars](https://img.shields.io/github/stars/t2sever/gfcli.svg)](https://github.com/t2sever/gfcli/stargazers)
 [![Downloads](https://img.shields.io/npm/dm/google-font-cli.svg)](https://www.npmjs.com/package/google-font-cli)
 
 ![how gfcli works](https://raw.githubusercontent.com/tinsever/google-font-cli/master/gfcli.gif)
@@ -70,8 +70,7 @@ $ npm install -g google-font-cli
 
 ## homebrew using tap
 ```bash
-$ brew tap tinsever/google-font-cli
-$ brew install gfcli
+$ brew install t2sever/tap/gfcli
 ```
 
 
