@@ -202,7 +202,7 @@ $ gfcli copy work sans -v 200,400,600
 
 ## Prerequisites
 
-- Node.js 14+ (LTS) recommended.
+- Node.js 20+ required.
 - Windows: run the CLI with administrative privileges when installing system fonts.
 
 ## Documentation

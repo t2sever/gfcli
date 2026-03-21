@@ -2,12 +2,12 @@
 
 ## Supported Versions
 
-This project provides security updates for releases running on the following versions of Node.js:
+This project provides security updates for releases running on Node.js 20 and newer.
 
 - Node.js 25.x (Current)
 - Node.js 24.x (Active LTS)
 - Node.js 22.x (Maintenance LTS)
-- Node.js 20.x (Approaching End-of-Life)
+- Node.js 20.x
 
 If there is a major security flaw and you are dependent on an older version, we might be willing to provide a backported fix on a case-by-case basis.
 

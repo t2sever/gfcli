@@ -80,6 +80,12 @@ export interface MimeTypeResult {
   ext?: string;
 }
 
+export interface RequestOptions {
+  responseType?: 'text' | 'stream';
+  maxBytes?: number;
+  sniffBytes?: number;
+}
+
 // ============================================================================
 // Callback Types
 // ============================================================================
@@ -116,7 +122,6 @@ export interface GoogleFontInstance extends FontData {
   category?: string;
   variants?: string[] | Record<string, string>;
   apiUrl: string;
-  _fileName: string;
   
   getFamily(): string;
   getVariants(): string[];
@@ -169,13 +174,16 @@ export interface RequestInstance {
   redirect: number;
   _mimeType?: MimeTypeResult;
   req?: import('http').ClientRequest;
+  res?: import('http').IncomingMessage;
   mimeType: boolean | MimeTypeResult;
-  _firstBytes: boolean;
+  options: Required<RequestOptions>;
   
   init(uri: string): void;
-  _getProperLibrary(uri: URL): typeof import('http') | typeof import('https');
+  _validateHttpsUrl(uri: string): URL;
   handleResponse(res: import('http').IncomingMessage, originalUri: string): void;
   handleError(error: Error): void;
+  _succeed(payload: string): void;
+  _fail(error: Error): void;
   getMimeType(): MimeTypeResult | undefined;
   
   // PassThrough/EventEmitter methods
@@ -222,9 +230,4 @@ declare module 'node-powershell' {
   }
   
   export = PowerShell;
-}
-
-declare module 'pascal-case' {
-  function pascalCase(str: string): string;
-  export = pascalCase;
 }

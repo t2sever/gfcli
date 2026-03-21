@@ -20,8 +20,3 @@ declare module 'node-powershell' {
   
   export = PowerShell;
 }
-
-declare module 'pascal-case' {
-  function pascalCase(str: string): string;
-  export = pascalCase;
-}

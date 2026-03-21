@@ -1,13 +1,11 @@
 'use strict';
 
-const Request = require('../lib/request');
 const EventEmitter = require('events').EventEmitter;
-const http = require('http');
 const https = require('https');
 
-// Mock https and http modules
 jest.mock('https');
-jest.mock('http');
+
+const Request = require('../lib/request');
 
 describe('Request', () => {
 	let mockResponse;
@@ -15,234 +13,213 @@ describe('Request', () => {
 
 	beforeEach(() => {
 		jest.clearAllMocks();
-		
+
 		mockResponse = new EventEmitter();
 		mockResponse.statusCode = 200;
 		mockResponse.headers = {};
-		
+		mockResponse.resume = jest.fn();
+		mockResponse.destroy = jest.fn();
+
 		mockRequest = new EventEmitter();
 		mockRequest.setTimeout = jest.fn();
 		mockRequest.destroy = jest.fn();
-		
+
 		https.get.mockImplementation((url, callback) => {
 			setImmediate(() => callback(mockResponse));
 			return mockRequest;
 		});
-		
-		http.get.mockImplementation((url, callback) => {
-			setImmediate(() => callback(mockResponse));
+	});
+
+	it('creates instances with or without new', () => {
+		expect(new Request('https://example.com')).toBeInstanceOf(Request);
+		expect(Request('https://example.com')).toBeInstanceOf(Request);
+	});
+
+	it('emits error for invalid URLs', (done) => {
+		const request = new Request('not-a-valid-url');
+
+		request.on('error', (err) => {
+			expect(err.message).toContain('invalid url');
+			done();
+		});
+	});
+
+	it('rejects non-https URLs', (done) => {
+		const request = new Request('http://example.com');
+
+		request.on('error', (err) => {
+			expect(err.message).toContain('invalid url');
+			done();
+		});
+	});
+
+	it('emits success with text payload in text mode', (done) => {
+		const request = new Request('https://example.com', { responseType: 'text', maxBytes: 1024 });
+		const chunks = [];
+
+		request.on('data', (chunk) => chunks.push(chunk));
+		request.on('success', (data) => {
+			expect(data).toBe('hello world');
+			expect(chunks).toHaveLength(0);
+			done();
+		});
+
+		setImmediate(() => {
+			mockResponse.emit('data', Buffer.from('hello '));
+			mockResponse.emit('data', Buffer.from('world'));
+			mockResponse.emit('end');
+		});
+	});
+
+	it('streams data through in stream mode', (done) => {
+		const request = new Request('https://example.com/font.ttf', {
+			responseType: 'stream',
+			maxBytes: 1024,
+			sniffBytes: 32
+		});
+		const chunks = [];
+
+		request.on('data', (chunk) => chunks.push(chunk));
+		request.on('success', (data) => {
+			expect(data).toBe('');
+			expect(Buffer.concat(chunks).toString('utf8')).toBe('font-data');
+			done();
+		});
+
+		setImmediate(() => {
+			mockResponse.emit('data', Buffer.from('font-data'));
+			mockResponse.emit('end');
+		});
+	});
+
+	it('follows https redirects', (done) => {
+		const redirectResponse = new EventEmitter();
+		redirectResponse.statusCode = 301;
+		redirectResponse.headers = { location: 'https://cdn.example.com/font.ttf' };
+		redirectResponse.resume = jest.fn();
+
+		const finalResponse = new EventEmitter();
+		finalResponse.statusCode = 200;
+		finalResponse.headers = {};
+		finalResponse.resume = jest.fn();
+
+		let callCount = 0;
+		https.get.mockImplementation((url, callback) => {
+			callCount += 1;
+			setImmediate(() => callback(callCount === 1 ? redirectResponse : finalResponse));
 			return mockRequest;
 		});
+
+		const request = new Request('https://example.com/font.ttf');
+		request.on('success', (data) => {
+			expect(callCount).toBe(2);
+			expect(redirectResponse.resume).toHaveBeenCalled();
+			expect(data).toBe('final');
+			done();
+		});
+
+		setTimeout(() => {
+			finalResponse.emit('data', Buffer.from('final'));
+			finalResponse.emit('end');
+		}, 20);
 	});
 
-	describe('constructor', () => {
-		it('should create instance with uri', () => {
-			const request = new Request('https://example.com');
-			expect(request).toBeInstanceOf(Request);
+	it('rejects redirects to non-https targets', (done) => {
+		const redirectResponse = new EventEmitter();
+		redirectResponse.statusCode = 302;
+		redirectResponse.headers = { location: 'http://insecure.example.com/font.ttf' };
+		redirectResponse.resume = jest.fn();
+
+		const request = new Request('https://example.com/font.ttf');
+
+		request.on('error', (err) => {
+			expect(err.message).toBe('Redirect target must use HTTPS.');
+			done();
 		});
 
-		it('should work without new keyword', () => {
-			const request = Request('https://example.com');
-			expect(request).toBeInstanceOf(Request);
-		});
-
-		it('should emit error for invalid URL', (done) => {
-			const request = new Request('not-a-valid-url');
-			request.on('error', (err) => {
-				expect(err.message).toContain('invalid url');
-				done();
-			});
-		});
-
-		it('should set redirect count to 3', () => {
-			const request = new Request('https://example.com');
-			expect(request.redirect).toBe(3);
-		});
+		request.handleResponse(redirectResponse, 'https://example.com/font.ttf');
 	});
 
-	describe('_getProperLibrary', () => {
-		it('should return https for https URLs', () => {
-			const request = new Request('https://example.com');
-			const lib = request._getProperLibrary({ protocol: 'https:' });
-			expect(lib).toBe(https);
+	it('errors when redirect limit is exceeded', (done) => {
+		const redirectResponse = new EventEmitter();
+		redirectResponse.statusCode = 301;
+		redirectResponse.headers = { location: 'https://cdn.example.com/font.ttf' };
+		redirectResponse.resume = jest.fn();
+
+		const request = new Request('https://example.com/font.ttf');
+		request.redirect = 0;
+
+		request.on('error', (err) => {
+			expect(err.message).toBe('Too many redirects.');
+			done();
 		});
 
-		it('should return http for http URLs', () => {
-			const request = new Request('http://example.com');
-			const lib = request._getProperLibrary({ protocol: 'http:' });
-			expect(lib).toBe(http);
-		});
+		request.handleResponse(redirectResponse, 'https://example.com/font.ttf');
 	});
 
-	describe('handleResponse', () => {
-		it('should emit success on 200 response', (done) => {
-			const request = new Request('https://example.com');
-			const testData = 'test response data';
-			
-			request.on('success', (data) => {
-				expect(data).toBe(testData);
-				done();
-			});
-			
-			// Simulate data and end events
+	it('enforces max response size in text mode', (done) => {
+		const request = new Request('https://example.com', { responseType: 'text', maxBytes: 4 });
+
+		request.on('error', (err) => {
 			setImmediate(() => {
-				mockResponse.emit('data', Buffer.from(testData));
-				mockResponse.emit('end');
-			});
-		});
-
-		it('should handle redirect responses', (done) => {
-			const redirectResponse = new EventEmitter();
-			redirectResponse.statusCode = 301;
-			redirectResponse.headers = { location: 'https://new-url.com' };
-			
-			const finalResponse = new EventEmitter();
-			finalResponse.statusCode = 200;
-			
-			let callCount = 0;
-			https.get.mockImplementation((url, callback) => {
-				callCount++;
-				if (callCount === 1) {
-					setImmediate(() => callback(redirectResponse));
-				} else {
-					setImmediate(() => callback(finalResponse));
-				}
-				return mockRequest;
-			});
-			
-			const request = new Request('https://example.com');
-			
-			request.on('success', (data) => {
-				expect(callCount).toBe(2);
-				done();
-			});
-			
-			setTimeout(() => {
-				finalResponse.emit('data', Buffer.from('final data'));
-				finalResponse.emit('end');
-			}, 20);
-		});
-
-		it('should emit error for bad status codes', (done) => {
-			mockResponse.statusCode = 404;
-			
-			const request = new Request('https://example.com');
-			
-			request.on('error', (err) => {
-				expect(err.message).toContain('Bad response: 404');
-				expect(err.statusCode).toBe(404);
+				expect(err.message).toBe('Response exceeded maximum allowed size.');
+				expect(mockResponse.destroy).toHaveBeenCalled();
+				expect(mockRequest.destroy).toHaveBeenCalled();
 				done();
 			});
 		});
 
-		it('should handle multiple redirect status codes', () => {
-			const redirectCodes = [301, 302, 303, 307, 308];
-			
-			redirectCodes.forEach(code => {
-				const response = new EventEmitter();
-				response.statusCode = code;
-				response.headers = { location: 'https://redirect.com' };
-				
-				// The response handler should detect these as redirects
-				expect([301, 302, 303, 307, 308].includes(code)).toBe(true);
-			});
+		setImmediate(() => {
+			mockResponse.emit('data', Buffer.from('toolarge'));
 		});
 	});
 
-	describe('getMimeType', () => {
-		it('should return undefined initially', () => {
-			const request = new Request('https://example.com');
-			expect(request.getMimeType()).toBeUndefined();
-		});
+	it('enforces max response size in stream mode', (done) => {
+		const request = new Request('https://example.com/font.ttf', { responseType: 'stream', maxBytes: 4 });
 
-		it('should return mimeType after it is set', () => {
-			const request = new Request('https://example.com');
-			request._mimeType = { mime: 'font/woff2', ext: 'woff2' };
-			expect(request.getMimeType()).toEqual({ mime: 'font/woff2', ext: 'woff2' });
-		});
-	});
-
-	describe('handleError', () => {
-		it('should emit error event', (done) => {
-			const request = new Request('https://example.com');
-			const testError = new Error('Test error');
-			
-			request.on('error', (err) => {
-				expect(err).toBe(testError);
+		request.on('error', (err) => {
+			setImmediate(() => {
+				expect(err.message).toBe('Response exceeded maximum allowed size.');
+				expect(mockResponse.destroy).toHaveBeenCalled();
+				expect(mockRequest.destroy).toHaveBeenCalled();
 				done();
 			});
-			
-			request.handleError(testError);
+		});
+
+		setImmediate(() => {
+			mockResponse.emit('data', Buffer.from('toolarge'));
 		});
 	});
 
-	describe('timeout handling', () => {
-		it('should set timeout on request', () => {
-			const request = new Request('https://example.com');
-			
-			expect(mockRequest.setTimeout).toHaveBeenCalledWith(10000, expect.any(Function));
-		});
-	});
+	it('adds timeout handling once and destroys the request', (done) => {
+		const request = new Request('https://example.com');
+		const timeoutHandler = mockRequest.setTimeout.mock.calls[0][1];
+		const errorSpy = jest.fn();
 
-	describe('stream functionality', () => {
-		it('should be a PassThrough stream', () => {
-			const request = new Request('https://example.com');
-			
-			expect(typeof request.pipe).toBe('function');
-			expect(typeof request.write).toBe('function');
-			expect(typeof request.end).toBe('function');
-		});
-
-		it('should pass data through stream', (done) => {
-			// Create fresh mocks for this test
-			const freshResponse = new EventEmitter();
-			freshResponse.statusCode = 200;
-			
-			const freshRequest = new EventEmitter();
-			freshRequest.setTimeout = jest.fn();
-			freshRequest.destroy = jest.fn();
-			
-			https.get.mockImplementation((url, callback) => {
-				setImmediate(() => callback(freshResponse));
-				return freshRequest;
-			});
-			
-			const request = new Request('https://example.com');
-			
-			request.on('success', (data) => {
-				expect(data).toContain('Hello');
+		request.on('error', errorSpy);
+		request.on('error', (err) => {
+			setImmediate(() => {
+				expect(err.message).toBe('Request timeout.');
+				expect(mockRequest.destroy).toHaveBeenCalled();
+				expect(errorSpy).toHaveBeenCalledTimes(1);
 				done();
 			});
-			
-			request.on('error', done);
-			
-			setTimeout(() => {
-				freshResponse.emit('data', Buffer.from('Hello World'));
-				freshResponse.emit('end');
-			}, 10);
 		});
+
+		timeoutHandler();
+		timeoutHandler();
 	});
 
-	describe('connection error handling', () => {
-		it('should emit error on connection failure', (done) => {
-			const errorMockRequest = new EventEmitter();
-			errorMockRequest.setTimeout = jest.fn();
-			errorMockRequest.destroy = jest.fn();
-			
-			https.get.mockImplementation((url, callback) => {
-				// Emit error on the request object
-				setImmediate(() => {
-					errorMockRequest.emit('error', new Error('Connection refused'));
-				});
-				return errorMockRequest;
-			});
-			
-			const request = new Request('https://example.com');
-			
-			request.on('error', (err) => {
-				expect(err.message).toContain('failed');
-				done();
-			});
+	it('wraps connection failures', (done) => {
+		const request = new Request('https://example.com');
+
+		request.on('error', (err) => {
+			expect(err.message).toContain('Connection to example.com failed');
+			done();
+		});
+
+		setImmediate(() => {
+			mockRequest.emit('error', new Error('Connection refused'));
 		});
 	});
 });

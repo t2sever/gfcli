@@ -17,6 +17,9 @@
   "bugs": {
     "url": "https://github.com/t2sever/gfcli/issues"
   },
+  "engines": {
+    "node": ">=20"
+  },
   "license": "MIT",
   "keywords": [
     "google",
@@ -32,23 +35,23 @@
     "typecheck": "tsc"
   },
   "dependencies": {
-    "commander": "^12.1.0",
+    "change-case": "^5.4.4",
+    "commander": "^14.0.3",
     "copy-paste-win32fix": "^1.4.0",
-    "file-type": "^19.6.0",
-    "ink": "^6.6.0",
+    "file-type": "^21.3.3",
+    "ink": "^6.8.0",
     "ink-select-input": "^6.2.0",
     "ink-text-input": "^6.0.0",
-    "ora": "^5.4.1",
-    "pascal-case": "^1.1.2",
+    "ora": "^9.3.0",
     "picocolors": "^1.1.1",
-    "react": "^19.2.3"
+    "react": "^19.2.4"
   },
   "optionalDependencies": {
-    "node-powershell": "^4.0.0"
+    "node-powershell": "^5.0.1"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0",
-    "jest": "^30.2.0",
-    "typescript": "^5.7.0"
+    "@types/node": "^22.19.15",
+    "jest": "^30.3.0",
+    "typescript": "^5.9.3"
   }
 }

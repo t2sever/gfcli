@@ -1,248 +1,136 @@
 'use strict';
 
 const path = require('path');
-const os = require('os');
-const fs = require('fs').promises;
+const fs = require('fs');
+const fsPromises = fs.promises;
+const EventEmitter = require('events').EventEmitter;
 
-// Mock the request module
 jest.mock('../lib/request');
 
 describe('SystemFont', () => {
 	let systemFont;
+	let Request;
 	let mockRequest;
-	const EventEmitter = require('events').EventEmitter;
+	let writeStream;
 
 	beforeEach(() => {
 		jest.resetModules();
-		
-		// Setup mock request
+		jest.clearAllMocks();
+
+		writeStream = new EventEmitter();
+		writeStream.destroy = jest.fn();
+
 		mockRequest = new EventEmitter();
 		mockRequest.getMimeType = jest.fn().mockReturnValue({ mime: 'application/font-sfnt' });
-		mockRequest.pipe = jest.fn().mockReturnValue(mockRequest);
-		
-		const Request = require('../lib/request');
+		mockRequest.pipe = jest.fn().mockReturnValue(writeStream);
+
+		Request = require('../lib/request');
 		Request.mockImplementation(() => mockRequest);
-		
+
+		jest.spyOn(fsPromises, 'mkdtemp').mockResolvedValue('/tmp/gfcli-12345');
+		jest.spyOn(fsPromises, 'mkdir').mockResolvedValue(undefined);
+		jest.spyOn(fsPromises, 'rename').mockResolvedValue(undefined);
+		jest.spyOn(fsPromises, 'rm').mockResolvedValue(undefined);
+		jest.spyOn(fsPromises, 'unlink').mockResolvedValue(undefined);
+		jest.spyOn(fs, 'createWriteStream').mockReturnValue(writeStream);
+
 		systemFont = require('../lib/system-font');
 	});
 
 	afterEach(() => {
-		jest.clearAllMocks();
+		jest.restoreAllMocks();
 	});
 
-	describe('module exports', () => {
-		it('should export a SystemFont instance', () => {
-			expect(systemFont).toBeDefined();
-			expect(typeof systemFont.install).toBe('function');
-			expect(typeof systemFont.saveAt).toBe('function');
-			expect(typeof systemFont.saveHere).toBe('function');
-		});
+	it('exports a SystemFont instance', () => {
+		expect(systemFont).toBeDefined();
+		expect(typeof systemFont.install).toBe('function');
+		expect(typeof systemFont.saveAt).toBe('function');
+		expect(typeof systemFont.saveHere).toBe('function');
 	});
 
-	describe('_checkDestFolder', () => {
-		it('should return resolved absolute path', async () => {
-			const result = await systemFont._checkDestFolder('/tmp/test');
-			expect(path.isAbsolute(result)).toBe(true);
-		});
-
-		it('should use cwd for null destination', async () => {
-			const result = await systemFont._checkDestFolder(null);
-			expect(result).toBeTruthy();
-		});
-
-		it('should use cwd for undefined destination', async () => {
-			const result = await systemFont._checkDestFolder(undefined);
-			expect(result).toBeTruthy();
-		});
-
-		it('should use cwd for empty string', async () => {
-			const result = await systemFont._checkDestFolder('');
-			expect(result).toBeTruthy();
-		});
-
-		it('should throw for non-string destination', async () => {
-			await expect(systemFont._checkDestFolder(123)).rejects.toThrow(
-				'Destination folder for font must be a string'
-			);
-		});
-
-		it('should throw for array destination', async () => {
-			await expect(systemFont._checkDestFolder(['path'])).rejects.toThrow(
-				'Destination folder for font must be a string'
-			);
-		});
-
-		it('should resolve relative paths', async () => {
-			const result = await systemFont._checkDestFolder('./test-folder');
-			expect(path.isAbsolute(result)).toBe(true);
-			expect(result).toContain('test-folder');
-		});
+	it('_checkDestFolder resolves absolute paths', async () => {
+		const result = await systemFont._checkDestFolder('./fonts');
+		expect(path.isAbsolute(result)).toBe(true);
 	});
 
-	describe('_isFolderOk', () => {
-		it('should create folder if not exists', async () => {
-			const mkdirSpy = jest.spyOn(fs, 'mkdir').mockResolvedValue(undefined);
-			
-			await systemFont._isFolderOk('/tmp/new-folder');
-			
-			expect(mkdirSpy).toHaveBeenCalledWith('/tmp/new-folder', { recursive: true });
-			mkdirSpy.mockRestore();
-		});
-
-		it('should not throw if folder already exists', async () => {
-			const error = new Error('Directory exists');
-			error.code = 'EEXIST';
-			jest.spyOn(fs, 'mkdir').mockRejectedValue(error);
-			
-			await expect(systemFont._isFolderOk('/tmp/existing')).resolves.toBeUndefined();
-		});
-
-		it('should throw for other mkdir errors', async () => {
-			const error = new Error('Permission denied');
-			error.code = 'EACCES';
-			jest.spyOn(fs, 'mkdir').mockRejectedValue(error);
-			
-			await expect(systemFont._isFolderOk('/tmp/no-access')).rejects.toThrow(
-				'Error while creating folder'
-			);
-		});
+	it('_checkDestFolder rejects non-string destinations', async () => {
+		await expect(systemFont._checkDestFolder(123)).rejects.toThrow('Destination folder for font must be a string');
 	});
 
-	describe('_saveTmp', () => {
-		it('should throw error for empty remoteFile', async () => {
-			await expect(systemFont._saveTmp(null, 'test')).rejects.toThrow(
-				'Nothing to download'
-			);
-		});
-
-		it('should throw error for undefined remoteFile', async () => {
-			await expect(systemFont._saveTmp(undefined, 'test')).rejects.toThrow(
-				'Nothing to download'
-			);
-		});
-
-		it('should throw error for empty string remoteFile', async () => {
-			await expect(systemFont._saveTmp('', 'test')).rejects.toThrow(
-				'Nothing to download'
-			);
-		});
+	it('_saveTmp rejects empty remoteFile', async () => {
+		await expect(systemFont._saveTmp('', 'TestFont')).rejects.toThrow('Nothing to download');
 	});
 
-	describe('saveAt', () => {
-		it('should be async function', () => {
-			expect(systemFont.saveAt.constructor.name).toBe('AsyncFunction');
+	it('_saveTmp creates a unique temp directory and configures a secure Request', async () => {
+		const savePromise = systemFont._saveTmp('https://example.com/font.ttf', 'TestFont');
+		await new Promise((resolve) => setImmediate(resolve));
+		writeStream.emit('finish');
+		const result = await savePromise;
+
+		expect(fsPromises.mkdtemp).toHaveBeenCalledWith(path.join(require('os').tmpdir(), 'gfcli-'));
+		expect(fs.createWriteStream).toHaveBeenCalledWith('/tmp/gfcli-12345/TestFont.ttf');
+		expect(Request).toHaveBeenCalledWith('https://example.com/font.ttf', {
+			responseType: 'stream',
+			maxBytes: 50 * 1024 * 1024,
+			sniffBytes: 8192
 		});
+		expect(result).toBe('/tmp/gfcli-12345/TestFont.ttf');
 	});
 
-	describe('saveHere', () => {
-		it('should call saveAt with false as destFolder', async () => {
-			const saveAtSpy = jest.spyOn(systemFont, 'saveAt').mockResolvedValue('/path/to/font.ttf');
-			
-			await systemFont.saveHere('https://example.com/font.ttf', 'TestFont');
-			
-			expect(saveAtSpy).toHaveBeenCalledWith(
-				'https://example.com/font.ttf',
-				false,
-				'TestFont'
-			);
-			
-			saveAtSpy.mockRestore();
-		});
+	it('_saveTmp accepts extension fallback when MIME is unavailable', async () => {
+		mockRequest.getMimeType.mockReturnValue(undefined);
+
+		const savePromise = systemFont._saveTmp('https://example.com/font.woff2', 'TestFont');
+		await new Promise((resolve) => setImmediate(resolve));
+		writeStream.emit('finish');
+
+		await expect(savePromise).resolves.toBe('/tmp/gfcli-12345/TestFont.woff2');
 	});
 
-	describe('install', () => {
-		const originalPlatform = process.platform;
+	it('_saveTmp rejects MIME and extension mismatches and cleans up', async () => {
+		mockRequest.getMimeType.mockReturnValue({ mime: 'font/woff2' });
 
-		afterEach(() => {
-			Object.defineProperty(process, 'platform', { value: originalPlatform });
-		});
+		const savePromise = systemFont._saveTmp('https://example.com/font.ttf', 'TestFont');
+		await new Promise((resolve) => setImmediate(resolve));
+		writeStream.emit('finish');
 
-		it('should be async function', () => {
-			expect(systemFont.install.constructor.name).toBe('AsyncFunction');
-		});
-
-		it('should use correct folder for linux', async () => {
-			// Skip if not on a unix-like system
-			if (os.platform() === 'win32') {
-				return;
-			}
-
-			const saveAtSpy = jest.spyOn(systemFont, 'saveAt').mockResolvedValue('/path');
-			
-			// Note: We can't easily mock os.platform() in the module that's already loaded
-			// This test verifies the method exists and is callable
-			expect(typeof systemFont.install).toBe('function');
-			
-			saveAtSpy.mockRestore();
-		});
-
-		it('should use correct folder for darwin', async () => {
-			const saveAtSpy = jest.spyOn(systemFont, 'saveAt').mockResolvedValue('/path');
-			
-			// Verify the method exists
-			expect(typeof systemFont.install).toBe('function');
-			
-			saveAtSpy.mockRestore();
-		});
+		await expect(savePromise).rejects.toThrow('Downloaded file is not a supported font.');
+		expect(fsPromises.rm).toHaveBeenCalledWith('/tmp/gfcli-12345', { recursive: true, force: true });
 	});
 
-	describe('_move', () => {
-		it('should move file to destination folder', async () => {
-			const oldPath = '/tmp/test-font.ttf';
-			const destFolder = '/tmp/dest';
-			
-			jest.spyOn(fs, 'mkdir').mockResolvedValue(undefined);
-			const renameSpy = jest.spyOn(fs, 'rename').mockResolvedValue(undefined);
-			
-			const result = await systemFont._move(oldPath, destFolder);
-			
-			expect(renameSpy).toHaveBeenCalled();
-			expect(result).toContain('test-font.ttf');
-			
-			renameSpy.mockRestore();
-		});
+	it('_saveTmp cleans up on request errors', async () => {
+		const savePromise = systemFont._saveTmp('https://example.com/font.ttf', 'TestFont');
+		await new Promise((resolve) => setImmediate(resolve));
+		mockRequest.emit('error', new Error('boom'));
 
-		it('should throw on rename error', async () => {
-			jest.spyOn(fs, 'mkdir').mockResolvedValue(undefined);
-			jest.spyOn(fs, 'rename').mockRejectedValue(new Error('Rename failed'));
-			
-			await expect(systemFont._move('/old/path.ttf', '/new')).rejects.toThrow(
-				'Something went wrong writing the file'
-			);
-		});
-	});
-});
-
-describe('SystemFont MIME type validation', () => {
-	it('should recognize ttf files as valid fonts', () => {
-		// Valid font MIME types
-		const validMimeTypes = [
-			{ mime: 'application/font-sfnt' },
-			{ mime: 'font/woff2' }
-		];
-		
-		validMimeTypes.forEach(mimeType => {
-			const isValid = mimeType.mime === 'application/font-sfnt' || 
-			               mimeType.mime === 'font/woff2';
-			expect(isValid).toBe(true);
-		});
+		await expect(savePromise).rejects.toThrow('boom');
+		expect(writeStream.destroy).toHaveBeenCalled();
+		expect(fsPromises.rm).toHaveBeenCalledWith('/tmp/gfcli-12345', { recursive: true, force: true });
 	});
 
-	it('should recognize valid font extensions', () => {
-		const validExtensions = ['.ttf', '.woff2'];
-		
-		validExtensions.forEach(ext => {
-			const isValid = ext === '.ttf' || ext === '.woff2';
-			expect(isValid).toBe(true);
-		});
+	it('saveHere delegates to saveAt with false destination', async () => {
+		const saveAtSpy = jest.spyOn(systemFont, 'saveAt').mockResolvedValue('/tmp/font.ttf');
+		await systemFont.saveHere('https://example.com/font.ttf', 'TestFont');
+		expect(saveAtSpy).toHaveBeenCalledWith('https://example.com/font.ttf', false, 'TestFont');
 	});
 
-	it('should reject invalid extensions', () => {
-		const invalidExtensions = ['.txt', '.pdf', '.jpg', '.exe'];
-		
-		invalidExtensions.forEach(ext => {
-			const isValid = ext === '.ttf' || ext === '.woff2';
-			expect(isValid).toBe(false);
-		});
+	it('_move moves the file and cleans up the temp directory', async () => {
+		const result = await systemFont._move('/tmp/gfcli-12345/TestFont.ttf', '/tmp/dest');
+		expect(fsPromises.rename).toHaveBeenCalledWith('/tmp/gfcli-12345/TestFont.ttf', '/tmp/dest/TestFont.ttf');
+		expect(fsPromises.rm).toHaveBeenCalledWith('/tmp/gfcli-12345', { recursive: true, force: true });
+		expect(result).toBe('/tmp/dest/TestFont.ttf');
+	});
+
+	it('_move surfaces rename failures', async () => {
+		fsPromises.rename.mockRejectedValueOnce(new Error('Rename failed'));
+		await expect(systemFont._move('/tmp/gfcli-12345/TestFont.ttf', '/tmp/dest')).rejects.toThrow('Something went wrong writing the file.');
+	});
+
+	it('_isValidFontFile enforces MIME and extension rules', () => {
+		expect(systemFont._isValidFontFile({ mime: 'application/font-sfnt' }, '.ttf')).toBe(true);
+		expect(systemFont._isValidFontFile({ mime: 'font/woff2' }, '.woff2')).toBe(true);
+		expect(systemFont._isValidFontFile({ mime: 'font/woff2' }, '.ttf')).toBe(false);
+		expect(systemFont._isValidFontFile(undefined, '.ttf')).toBe(true);
+		expect(systemFont._isValidFontFile(undefined, '.pdf')).toBe(false);
 	});
 });

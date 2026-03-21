@@ -12,6 +12,6 @@ module.exports = {
   maxWorkers: 1,
   // Allow Jest to transform ESM packages from node_modules
   transformIgnorePatterns: [
-    'node_modules/(?!(pascal-case|no-case|lower-case|upper-case)/)'
+    'node_modules/(?!(change-case)/)'
   ]
 };

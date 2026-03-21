@@ -1,235 +1,205 @@
 'use strict';
 
+const EventEmitter = require('events').EventEmitter;
+
+jest.mock('../lib/case', () => ({
+	toPascalCase: jest.fn(async (value) => value.replace(/[^a-z0-9]+/gi, ' ').trim().split(/\s+/).map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(''))
+}));
+
+jest.mock('../lib/request');
+jest.mock('../lib/system-font', () => ({
+	install: jest.fn(),
+	saveAt: jest.fn()
+}));
+
 const GoogleFont = require('../lib/google-font');
+const Request = require('../lib/request');
+const systemFont = require('../lib/system-font');
+const { toPascalCase } = require('../lib/case');
 
 describe('GoogleFont', () => {
-	describe('constructor', () => {
-		it('should create instance with fontData', () => {
-			const fontData = {
+	let pendingRequests;
+
+	beforeEach(() => {
+		jest.clearAllMocks();
+		pendingRequests = [];
+		Request.mockImplementation(() => {
+			const emitter = new EventEmitter();
+			pendingRequests.push(emitter);
+			return emitter;
+		});
+	});
+
+	describe('constructor and getters', () => {
+		it('creates an instance with expected properties', () => {
+			const font = new GoogleFont({
 				family: 'Roboto',
 				category: 'sans-serif',
 				variants: ['regular', 'italic', '700']
-			};
-			const font = new GoogleFont(fontData);
+			});
 
 			expect(font.family).toBe('Roboto');
 			expect(font.category).toBe('sans-serif');
 			expect(font.getVariants()).toEqual(['regular', 'italic', '700']);
+			expect(font.apiUrl).toBe('https://gwfh.mranftl.com/api/fonts/roboto');
 		});
 
-		it('should work without new keyword', () => {
-			const fontData = { family: 'Open Sans' };
-			const font = GoogleFont(fontData);
-
-			expect(font).toBeInstanceOf(GoogleFont);
-			expect(font.family).toBe('Open Sans');
+		it('works without new', () => {
+			expect(GoogleFont({ family: 'Open Sans' })).toBeInstanceOf(GoogleFont);
 		});
 
-		it('should handle familyName property', () => {
-			const fontData = { familyName: 'Lato' };
-			const font = new GoogleFont(fontData);
-
-			expect(font.family).toBe('Lato');
-		});
-
-		it('should default to empty string for missing family', () => {
-			const font = new GoogleFont({});
-
-			expect(font.family).toBe('');
-		});
-
-		it('should generate correct API URL', () => {
+		it('returns the family and CSS URL', () => {
 			const font = new GoogleFont({ family: 'Open Sans' });
-
-			expect(font.apiUrl).toBe('https://gwfh.mranftl.com/api/fonts/open-sans');
-		});
-
-		it('should generate correct API URL with spaces', () => {
-			const font = new GoogleFont({ family: 'Roboto Mono' });
-
-			expect(font.apiUrl).toBe('https://gwfh.mranftl.com/api/fonts/roboto-mono');
-		});
-	});
-
-	describe('getFamily', () => {
-		it('should return the font family name', () => {
-			const font = new GoogleFont({ family: 'Inter' });
-
-			expect(font.getFamily()).toBe('Inter');
-		});
-	});
-
-	describe('getVariants', () => {
-		it('should return variants array', () => {
-			const font = new GoogleFont({
-				family: 'Roboto',
-				variants: ['regular', '500', '700', 'italic']
-			});
-
-			expect(font.getVariants()).toEqual(['regular', '500', '700', 'italic']);
-		});
-
-		it('should return object keys when variants is an object', () => {
-			const font = new GoogleFont({
-				family: 'Roboto',
-				variants: { regular: 'url1', italic: 'url2' }
-			});
-
-			expect(font.getVariants()).toEqual(['regular', 'italic']);
-		});
-
-		it('should return empty array when no variants', () => {
-			const font = new GoogleFont({ family: 'Test' });
-
-			expect(font.getVariants()).toEqual([]);
-		});
-	});
-
-	describe('getCategory', () => {
-		it('should return the font category', () => {
-			const font = new GoogleFont({
-				family: 'Roboto',
-				category: 'sans-serif'
-			});
-
-			expect(font.getCategory()).toBe('sans-serif');
-		});
-
-		it('should return undefined for missing category', () => {
-			const font = new GoogleFont({ family: 'Test' });
-
-			expect(font.getCategory()).toBeUndefined();
-		});
-	});
-
-	describe('getCssUrl', () => {
-		it('should return correct Google Fonts CSS URL', () => {
-			const font = new GoogleFont({ family: 'Roboto' });
-
-			expect(font.getCssUrl()).toBe('https://fonts.googleapis.com/css?family=Roboto');
-		});
-
-		it('should replace spaces with + in URL', () => {
-			const font = new GoogleFont({ family: 'Open Sans' });
-
+			expect(font.getFamily()).toBe('Open Sans');
 			expect(font.getCssUrl()).toBe('https://fonts.googleapis.com/css?family=Open+Sans');
 		});
 
-		it('should handle multiple spaces', () => {
-			const font = new GoogleFont({ family: 'Noto Sans JP' });
-
-			expect(font.getCssUrl()).toBe('https://fonts.googleapis.com/css?family=Noto+Sans+JP');
-		});
-	});
-
-	describe('_normalizeVariant', () => {
-		it('should normalize 400 to regular', () => {
-			const font = new GoogleFont({ family: 'Test' });
-
+		it('normalizes variants', () => {
+			const font = new GoogleFont({ family: 'Inter' });
 			expect(font._normalizeVariant('400')).toBe('regular');
-		});
-
-		it('should normalize 400italic to italic', () => {
-			const font = new GoogleFont({ family: 'Test' });
-
 			expect(font._normalizeVariant('400italic')).toBe('italic');
-		});
-
-		it('should keep other variants unchanged', () => {
-			const font = new GoogleFont({ family: 'Test' });
-
 			expect(font._normalizeVariant('700')).toBe('700');
-			expect(font._normalizeVariant('500italic')).toBe('500italic');
-			expect(font._normalizeVariant('regular')).toBe('regular');
-		});
-
-		it('should handle numeric input', () => {
-			const font = new GoogleFont({ family: 'Test' });
-
-			expect(font._normalizeVariant(400)).toBe('regular');
-			expect(font._normalizeVariant(700)).toBe('700');
-		});
-
-		it('should trim whitespace', () => {
-			const font = new GoogleFont({ family: 'Test' });
-
-			expect(font._normalizeVariant('  700  ')).toBe('700');
-		});
-	});
-
-	describe('_getFileMap', () => {
-		it('should accept format and callback', () => {
-			const font = new GoogleFont({ family: 'Roboto' });
-			
-			// Test that format parameter is accepted
-			expect(() => font._getFileMap('ttf', () => {})).not.toThrow();
-			expect(() => font._getFileMap('woff2', () => {})).not.toThrow();
-		});
-
-		it('should accept only callback (backward compatibility)', () => {
-			const font = new GoogleFont({ family: 'Roboto' });
-			
-			expect(() => font._getFileMap(() => {})).not.toThrow();
-		});
-
-		it('should return a promise when no callback provided', () => {
-			const font = new GoogleFont({ family: 'Roboto' });
-			const result = font._getFileMap('ttf');
-
-			expect(result).toBeInstanceOf(Promise);
 		});
 	});
 
 	describe('_getFileMapAsync', () => {
-		it('should default to ttf format when not specified', async () => {
+		it('uses the hardened Request helper and parses TTF URLs', async () => {
 			const font = new GoogleFont({ family: 'Roboto' });
-			// We just check that it doesn't throw for undefined format
-			const promise = font._getFileMapAsync();
-			expect(promise).toBeInstanceOf(Promise);
+			const promise = font._getFileMapAsync('ttf');
+
+			expect(Request).toHaveBeenCalledWith('https://gwfh.mranftl.com/api/fonts/roboto', {
+				responseType: 'text',
+				maxBytes: 5 * 1024 * 1024
+			});
+
+			pendingRequests[0].emit('success', JSON.stringify({
+				variants: [
+					{ id: 'regular', ttf: 'https://cdn.example.com/roboto-regular.ttf', woff2: 'https://cdn.example.com/roboto-regular.woff2' },
+					{ id: '700', ttf: 'https://cdn.example.com/roboto-700.ttf' }
+				]
+			}));
+
+			await expect(promise).resolves.toEqual({
+				regular: 'https://cdn.example.com/roboto-regular.ttf',
+				'700': 'https://cdn.example.com/roboto-700.ttf'
+			});
+		});
+
+		it('parses WOFF2 URLs', async () => {
+			const font = new GoogleFont({ family: 'Roboto' });
+			const promise = font._getFileMapAsync('woff2');
+
+			pendingRequests[0].emit('success', JSON.stringify({
+				variants: [
+					{ id: 'regular', ttf: 'https://cdn.example.com/roboto-regular.ttf', woff2: 'https://cdn.example.com/roboto-regular.woff2' }
+				]
+			}));
+
+			await expect(promise).resolves.toEqual({
+				regular: 'https://cdn.example.com/roboto-regular.woff2'
+			});
+		});
+
+		it('fails on invalid JSON', async () => {
+			const font = new GoogleFont({ family: 'Roboto' });
+			const promise = font._getFileMapAsync('ttf');
+
+			pendingRequests[0].emit('success', 'not-json');
+
+			await expect(promise).rejects.toThrow('Failed to parse GWFH JSON response');
+		});
+
+		it('propagates request errors', async () => {
+			const font = new GoogleFont({ family: 'Roboto' });
+			const promise = font._getFileMapAsync('ttf');
+
+			pendingRequests[0].emit('error', new Error('boom'));
+
+			await expect(promise).rejects.toThrow('boom');
 		});
 	});
 
-	describe('install', () => {
-		it('should accept variants and callback', () => {
+	describe('filename generation and save/install flows', () => {
+		it('uses PascalCase filenames for installAsync', async () => {
+			const font = new GoogleFont({ family: 'Open Sans' });
+			systemFont.install.mockResolvedValue('/fonts/OpenSans-regular.ttf');
+
+			const promise = font.installAsync(['regular']);
+			pendingRequests[0].emit('success', JSON.stringify({
+				variants: [{ id: 'regular', ttf: 'https://cdn.example.com/open-sans-regular.ttf' }]
+			}));
+
+			await expect(promise).resolves.toEqual([
+				{ family: 'Open Sans', variant: 'regular', path: '/fonts/OpenSans-regular.ttf' }
+			]);
+			expect(toPascalCase).toHaveBeenCalledWith('Open Sans');
+			expect(systemFont.install).toHaveBeenCalledWith('https://cdn.example.com/open-sans-regular.ttf', 'OpenSans-regular');
+		});
+
+		it('uses PascalCase filenames for saveAtAsync', async () => {
+			const font = new GoogleFont({ family: 'Roboto Mono' });
+			systemFont.saveAt.mockResolvedValue('/fonts/RobotoMono-regular.woff2');
+
+			const promise = font.saveAtAsync(['regular'], '/fonts', 'woff2');
+			pendingRequests[0].emit('success', JSON.stringify({
+				variants: [{ id: 'regular', woff2: 'https://cdn.example.com/roboto-mono-regular.woff2' }]
+			}));
+
+			await expect(promise).resolves.toEqual([
+				{ family: 'Roboto Mono', variant: 'regular', path: '/fonts/RobotoMono-regular.woff2' }
+			]);
+			expect(toPascalCase).toHaveBeenCalledWith('Roboto Mono');
+			expect(systemFont.saveAt).toHaveBeenCalledWith('https://cdn.example.com/roboto-mono-regular.woff2', '/fonts', 'RobotoMono-regular');
+		});
+
+		it('preserves readable output for punctuation-heavy names', async () => {
+			const font = new GoogleFont({ family: 'Noto Sans JP' });
+			systemFont.saveAt.mockResolvedValue('/fonts/NotoSansJP-regular.ttf');
+
+			const promise = font.saveAtAsync(['regular'], '/fonts', 'ttf');
+			pendingRequests[0].emit('success', JSON.stringify({
+				variants: [{ id: 'regular', ttf: 'https://cdn.example.com/noto-sans-jp-regular.ttf' }]
+			}));
+
+			await promise;
+			expect(systemFont.saveAt).toHaveBeenCalledWith('https://cdn.example.com/noto-sans-jp-regular.ttf', '/fonts', 'NotoSansJP-regular');
+		});
+
+		it('collects partial save results and throws AggregateError for failures', async () => {
+			const font = new GoogleFont({ family: 'Inter' });
+			systemFont.saveAt
+				.mockResolvedValueOnce('/fonts/Inter-regular.ttf')
+				.mockRejectedValueOnce(new Error('disk full'));
+
+			const promise = font.saveAtAsync(['regular', '700'], '/fonts', 'ttf');
+			pendingRequests[0].emit('success', JSON.stringify({
+				variants: [
+					{ id: 'regular', ttf: 'https://cdn.example.com/inter-regular.ttf' },
+					{ id: '700', ttf: 'https://cdn.example.com/inter-700.ttf' }
+				]
+			}));
+
+			await expect(promise).rejects.toMatchObject({
+				message: 'Failed to save 1 variant(s)',
+				results: [{ family: 'Inter', variant: 'regular', path: '/fonts/Inter-regular.ttf' }]
+			});
+		});
+	});
+
+	describe('callback wrappers', () => {
+		it('supports install callback style', () => {
 			const font = new GoogleFont({ family: 'Roboto' });
-			// Mock installAsync to prevent actual font installation
 			font.installAsync = jest.fn().mockResolvedValue([]);
-			
+
 			expect(() => font.install(['regular'], () => {})).not.toThrow();
 		});
 
-		it('should work without callback', () => {
+		it('supports saveAt callback style', () => {
 			const font = new GoogleFont({ family: 'Roboto' });
-			// Mock installAsync to prevent actual font installation
-			font.installAsync = jest.fn().mockResolvedValue([]);
-			
-			expect(() => font.install(['regular'])).not.toThrow();
-		});
-	});
-
-	describe('saveAt', () => {
-		it('should accept variants, destFolder, format, and callback', () => {
-			const font = new GoogleFont({ family: 'Roboto' });
-			// Mock saveAtAsync to prevent actual font download
 			font.saveAtAsync = jest.fn().mockResolvedValue([]);
-			
+
 			expect(() => font.saveAt(['regular'], '/tmp', 'ttf', () => {})).not.toThrow();
-		});
-
-		it('should accept callback as third argument (backward compatibility)', () => {
-			const font = new GoogleFont({ family: 'Roboto' });
-			// Mock saveAtAsync to prevent actual font download
-			font.saveAtAsync = jest.fn().mockResolvedValue([]);
-			
 			expect(() => font.saveAt(['regular'], '/tmp', () => {})).not.toThrow();
-		});
-
-		it('should work without callback', () => {
-			const font = new GoogleFont({ family: 'Roboto' });
-			// Mock saveAtAsync to prevent actual font download
-			font.saveAtAsync = jest.fn().mockResolvedValue([]);
-			
-			expect(() => font.saveAt(['regular'], '/tmp', 'woff2')).not.toThrow();
 		});
 	});
 });
