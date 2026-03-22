@@ -9,7 +9,8 @@ jest.mock('../lib/case', () => ({
 jest.mock('../lib/request');
 jest.mock('../lib/system-font', () => ({
 	install: jest.fn(),
-	saveAt: jest.fn()
+	saveAt: jest.fn(),
+	uninstall: jest.fn()
 }));
 
 const GoogleFont = require('../lib/google-font');
@@ -163,6 +164,22 @@ describe('GoogleFont', () => {
 
 			await promise;
 			expect(systemFont.saveAt).toHaveBeenCalledWith('https://cdn.example.com/noto-sans-jp-regular.ttf', '/fonts', 'NotoSansJP-regular');
+		});
+
+		it('uses PascalCase basenames for uninstallAsync', async () => {
+			const font = new GoogleFont({ family: 'Open Sans' });
+			systemFont.uninstall.mockResolvedValue(['/fonts/OpenSans-regular.ttf']);
+
+			const promise = font.uninstallAsync(['regular']);
+			pendingRequests[0].emit('success', JSON.stringify({
+				variants: [{ id: 'regular', ttf: 'https://cdn.example.com/open-sans-regular.ttf' }]
+			}));
+
+			await expect(promise).resolves.toEqual([
+				{ family: 'Open Sans', variant: 'regular', path: '/fonts/OpenSans-regular.ttf' }
+			]);
+			expect(toPascalCase).toHaveBeenCalledWith('Open Sans');
+			expect(systemFont.uninstall).toHaveBeenCalledWith('OpenSans-regular');
 		});
 
 		it('collects partial save results and throws AggregateError for failures', async () => {

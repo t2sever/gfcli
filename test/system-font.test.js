@@ -46,6 +46,7 @@ describe('SystemFont', () => {
 		expect(typeof systemFont.install).toBe('function');
 		expect(typeof systemFont.saveAt).toBe('function');
 		expect(typeof systemFont.saveHere).toBe('function');
+		expect(typeof systemFont.uninstall).toBe('function');
 	});
 
 	it('_checkDestFolder resolves absolute paths', async () => {
@@ -132,5 +133,25 @@ describe('SystemFont', () => {
 		expect(systemFont._isValidFontFile({ mime: 'font/woff2' }, '.ttf')).toBe(false);
 		expect(systemFont._isValidFontFile(undefined, '.ttf')).toBe(true);
 		expect(systemFont._isValidFontFile(undefined, '.pdf')).toBe(false);
+	});
+
+	it('uninstall removes existing font files and returns their paths', async () => {
+		jest.spyOn(fsPromises, 'unlink').mockResolvedValue(undefined);
+		const execSpy = jest.spyOn(require('child_process'), 'exec').mockImplementation((cmd, cb) => {
+			if (typeof cb === 'function') cb(null, '', '');
+			return /** @type {any} */ ({});
+		});
+
+		const result = await systemFont.uninstall('TestFont-regular');
+
+		expect(fsPromises.unlink).toHaveBeenCalled();
+		expect(result.length).toBeGreaterThan(0);
+		execSpy.mockRestore();
+	});
+
+	it('uninstall throws when no matching files exist', async () => {
+		jest.spyOn(fsPromises, 'unlink').mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
+
+		await expect(systemFont.uninstall('MissingFont-regular')).rejects.toThrow('Font file not found');
 	});
 });
