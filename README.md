@@ -1,12 +1,11 @@
 Google Font CLI
 =============
 
-> [!NOTE]  
-> I am moving the repository from [tinsever/google-font-cli](https://github.com/tinsever/google-font-cli) to here. This could take some time.
+[![Open on npmx.dev](https://npmx.dev/api/registry/badge/version/google-font-cli)](https://npmx.dev/package/google-font-cli)
+[![Open on npmx.dev](https://npmx.dev/api/registry/badge/size/google-font-cli)](https://npmx.dev/package/google-font-cli)
+[![Open on npmx.dev](https://npmx.dev/api/registry/badge/downloads-month/google-font-cli)](https://npmx.dev/package/google-font-cli)
 
-[![npm version](https://img.shields.io/npm/v/google-font-cli.svg)](https://www.npmjs.com/package/google-font-cli)
 [![GitHub stars](https://img.shields.io/github/stars/t2sever/gfcli.svg)](https://github.com/t2sever/gfcli/stargazers)
-[![Downloads](https://img.shields.io/npm/dm/google-font-cli.svg)](https://www.npmjs.com/package/google-font-cli)
 
 ![how gfcli works](https://raw.githubusercontent.com/tinsever/google-font-cli/master/gfcli.gif)
 
