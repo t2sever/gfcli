@@ -3,17 +3,19 @@
 const GoogleFont = require('../lib/google-font');
 
 // Mock modules before requiring GoogleFontList
-jest.mock('../lib/cache', () => ({
-	readCache: jest.fn().mockResolvedValue(null),
-	writeCache: jest.fn()
+vi.mock('../lib/cache', () => ({
+	readCache: vi.fn().mockResolvedValue(null),
+	writeCache: vi.fn()
 }));
 
 // Simple mock that doesn't emit anything - tests will manually set data
-jest.mock('../lib/request', () => {
+vi.mock('../lib/request', () => {
 	const { EventEmitter } = require('events');
-	return jest.fn().mockImplementation(() => {
-		return new EventEmitter();
-	});
+	const { vi } = require('vitest');
+	return {
+		__esModule: true,
+		default: vi.fn(() => new EventEmitter())
+	};
 });
 
 const GoogleFontList = require('../lib/google-font-list');
@@ -23,7 +25,7 @@ describe('GoogleFontList', () => {
 
 	beforeAll(() => {
 		// Suppress console.log during tests
-		consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+		consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 	});
 
 	afterAll(() => {
@@ -69,59 +71,69 @@ describe('GoogleFontList', () => {
 	});
 
 	describe('parseRawData', () => {
-		it('should parse valid JSON array', (done) => {
+		it('should parse valid JSON array', async () => {
 			const list = new GoogleFontList();
-			list.on('success', () => {
-				expect(list.data.length).toBe(2);
-				done();
+			await new Promise((resolve) => {
+				list.on('success', () => {
+					expect(list.data.length).toBe(2);
+					resolve();
+				});
+				list.parseRawData(JSON.stringify([
+					{ family: 'Test1', category: 'serif' },
+					{ family: 'Test2', category: 'sans-serif' }
+				]));
 			});
-			list.parseRawData(JSON.stringify([
-				{ family: 'Test1', category: 'serif' },
-				{ family: 'Test2', category: 'sans-serif' }
-			]));
 		});
 
-		it('should emit error for invalid JSON', (done) => {
+		it('should emit error for invalid JSON', async () => {
 			const list = new GoogleFontList();
-			list.on('error', (err) => {
-				expect(err.isInvalidJson).toBe(true);
-				done();
+			await new Promise((resolve) => {
+				list.on('error', (err) => {
+					expect(err.isInvalidJson).toBe(true);
+					resolve();
+				});
+				list.parseRawData('invalid json');
 			});
-			list.parseRawData('invalid json');
 		});
 
-		it('should emit error for non-array JSON', (done) => {
+		it('should emit error for non-array JSON', async () => {
 			const list = new GoogleFontList();
-			list.on('error', (err) => {
-				expect(err.isInvalidJson).toBe(true);
-				done();
+			await new Promise((resolve) => {
+				list.on('error', (err) => {
+					expect(err.isInvalidJson).toBe(true);
+					resolve();
+				});
+				list.parseRawData(JSON.stringify({ not: 'an array' }));
 			});
-			list.parseRawData(JSON.stringify({ not: 'an array' }));
 		});
 	});
 
 	describe('populate', () => {
-		it('should populate data with GoogleFont instances', (done) => {
+		it('should populate data with GoogleFont instances', async () => {
 			const list = new GoogleFontList();
-			list.on('success', () => {
-				expect(list.data.length).toBe(2);
-				expect(list.data[0]).toBeInstanceOf(GoogleFont);
-				expect(list.data[0].getFamily()).toBe('Font1');
-				done();
+			await new Promise((resolve) => {
+				list.on('success', () => {
+					expect(list.data.length).toBe(2);
+					expect(list.data[0]).toBeInstanceOf(GoogleFont);
+					expect(list.data[0].getFamily()).toBe('Font1');
+					resolve();
+				});
+				list.populate([
+					{ family: 'Font1' },
+					{ family: 'Font2' }
+				]);
 			});
-			list.populate([
-				{ family: 'Font1' },
-				{ family: 'Font2' }
-			]);
 		});
 
-		it('should emit success event', (done) => {
+		it('should emit success event', async () => {
 			const list = new GoogleFontList();
-			list.on('success', (result) => {
-				expect(result).toBe(list);
-				done();
+			await new Promise((resolve) => {
+				list.on('success', (result) => {
+					expect(result).toBe(list);
+					resolve();
+				});
+				list.populate([{ family: 'Test' }]);
 			});
-			list.populate([{ family: 'Test' }]);
 		});
 	});
 
@@ -144,7 +156,7 @@ describe('GoogleFontList', () => {
 		});
 
 		it('should not trigger load when cloning (skipInitialLoad)', () => {
-			const loadSpy = jest.spyOn(GoogleFontList.prototype, 'load');
+			const loadSpy = vi.spyOn(GoogleFontList.prototype, 'load');
 			try {
 				const list = new GoogleFontList({ skipInitialLoad: true });
 				list.data = [new GoogleFont({ family: 'Test' })];
@@ -159,7 +171,7 @@ describe('GoogleFontList', () => {
 	});
 
 	describe('searchFont', () => {
-		it('should find fonts matching search term', (done) => {
+		it('should find fonts matching search term', async () => {
 			const list = new GoogleFontList();
 			list.data = [
 				new GoogleFont({ family: 'Roboto', category: 'sans-serif' }),
@@ -167,196 +179,224 @@ describe('GoogleFontList', () => {
 				new GoogleFont({ family: 'Roboto Mono', category: 'monospace' }),
 				new GoogleFont({ family: 'Lato', category: 'sans-serif' })
 			];
-			
-			list.searchFont('Roboto', 'family', (err, result) => {
-				expect(err).toBeNull();
-				expect(result.data.length).toBe(2);
-				expect(result.data[0].getFamily()).toBe('Roboto');
-				expect(result.data[1].getFamily()).toBe('Roboto Mono');
-				done();
+
+			await new Promise((resolve) => {
+				list.searchFont('Roboto', 'family', (err, result) => {
+					expect(err).toBeNull();
+					expect(result.data.length).toBe(2);
+					expect(result.data[0].getFamily()).toBe('Roboto');
+					expect(result.data[1].getFamily()).toBe('Roboto Mono');
+					resolve();
+				});
 			});
 		});
 
-		it('should search case-insensitively', (done) => {
+		it('should search case-insensitively', async () => {
 			const list = new GoogleFontList();
 			list.data = [
 				new GoogleFont({ family: 'Roboto' }),
 				new GoogleFont({ family: 'Roboto Mono' })
 			];
-			
-			list.searchFont('roboto', 'family', (err, result) => {
-				expect(err).toBeNull();
-				expect(result.data.length).toBe(2);
-				done();
+
+			await new Promise((resolve) => {
+				list.searchFont('roboto', 'family', (err, result) => {
+					expect(err).toBeNull();
+					expect(result.data.length).toBe(2);
+					resolve();
+				});
 			});
 		});
 
-		it('should return empty array for no matches', (done) => {
+		it('should return empty array for no matches', async () => {
 			const list = new GoogleFontList();
 			list.data = [new GoogleFont({ family: 'Roboto' })];
-			
-			list.searchFont('NonExistent', 'family', (err, result) => {
-				expect(err).toBeNull();
-				expect(result.data.length).toBe(0);
-				done();
+
+			await new Promise((resolve) => {
+				list.searchFont('NonExistent', 'family', (err, result) => {
+					expect(err).toBeNull();
+					expect(result.data.length).toBe(0);
+					resolve();
+				});
 			});
 		});
 
-		it('should search by category', (done) => {
+		it('should search by category', async () => {
 			const list = new GoogleFontList();
 			list.data = [
 				new GoogleFont({ family: 'Roboto', category: 'sans-serif' }),
 				new GoogleFont({ family: 'Roboto Mono', category: 'monospace' })
 			];
-			
-			list.searchFont('monospace', 'category', (err, result) => {
-				expect(err).toBeNull();
-				expect(result.data.length).toBe(1);
-				expect(result.data[0].getFamily()).toBe('Roboto Mono');
-				done();
+
+			await new Promise((resolve) => {
+				list.searchFont('monospace', 'category', (err, result) => {
+					expect(err).toBeNull();
+					expect(result.data.length).toBe(1);
+					expect(result.data[0].getFamily()).toBe('Roboto Mono');
+					resolve();
+				});
 			});
 		});
 
-		it('should handle multiple search terms', (done) => {
+		it('should handle multiple search terms', async () => {
 			const list = new GoogleFontList();
 			list.data = [
 				new GoogleFont({ family: 'Open Sans' }),
 				new GoogleFont({ family: 'Roboto' })
 			];
-			
-			list.searchFont('open sans', 'family', (err, result) => {
-				expect(err).toBeNull();
-				expect(result.data.length).toBe(1);
-				expect(result.data[0].getFamily()).toBe('Open Sans');
-				done();
+
+			await new Promise((resolve) => {
+				list.searchFont('open sans', 'family', (err, result) => {
+					expect(err).toBeNull();
+					expect(result.data.length).toBe(1);
+					expect(result.data[0].getFamily()).toBe('Open Sans');
+					resolve();
+				});
 			});
 		});
 
-		it('should return no matches for empty search term', (done) => {
+		it('should return no matches for empty search term', async () => {
 			const list = new GoogleFontList();
 			list.data = [new GoogleFont({ family: 'Test' })];
-			
-			list.searchFont('', 'family', (err, result) => {
-				expect(err).toBeNull();
-				expect(result.data.length).toBe(0);
-				done();
+
+			await new Promise((resolve) => {
+				list.searchFont('', 'family', (err, result) => {
+					expect(err).toBeNull();
+					expect(result.data.length).toBe(0);
+					resolve();
+				});
 			});
 		});
 
-		it('should set filter metadata on result', (done) => {
+		it('should set filter metadata on result', async () => {
 			const list = new GoogleFontList();
 			list.data = [new GoogleFont({ family: 'Roboto' })];
-			
-			list.searchFont('Roboto', 'family', (err, result) => {
-				expect(result._filterField).toBe('family');
-				expect(result._filterTerm).toBe('Roboto');
-				done();
+
+			await new Promise((resolve) => {
+				list.searchFont('Roboto', 'family', (err, result) => {
+					expect(result._filterField).toBe('family');
+					expect(result._filterTerm).toBe('Roboto');
+					resolve();
+				});
 			});
 		});
 	});
 
 	describe('searchFontByName', () => {
-		it('should search fonts by family name', (done) => {
+		it('should search fonts by family name', async () => {
 			const list = new GoogleFontList();
 			list.data = [
 				new GoogleFont({ family: 'Roboto' }),
 				new GoogleFont({ family: 'Open Sans' })
 			];
-			
-			list.searchFontByName('Roboto', (err, result) => {
-				expect(err).toBeNull();
-				expect(result.data.length).toBe(1);
-				expect(result.data[0].getFamily()).toBe('Roboto');
-				done();
+
+			await new Promise((resolve) => {
+				list.searchFontByName('Roboto', (err, result) => {
+					expect(err).toBeNull();
+					expect(result.data.length).toBe(1);
+					expect(result.data[0].getFamily()).toBe('Roboto');
+					resolve();
+				});
 			});
 		});
 	});
 
 	describe('searchFontByType', () => {
-		it('should search fonts by category', (done) => {
+		it('should search fonts by category', async () => {
 			const list = new GoogleFontList();
 			list.data = [
 				new GoogleFont({ family: 'Roboto', category: 'sans-serif' }),
 				new GoogleFont({ family: 'Merriweather', category: 'serif' })
 			];
-			
-			list.searchFontByType('serif', (err, result) => {
-				expect(err).toBeNull();
-				expect(result.data.length).toBe(2); // Both contain 'serif'
-				done();
+
+			await new Promise((resolve) => {
+				list.searchFontByType('serif', (err, result) => {
+					expect(err).toBeNull();
+					expect(result.data.length).toBe(2); // Both contain 'serif'
+					resolve();
+				});
 			});
 		});
 	});
 
 	describe('getFont', () => {
-		it('should get exact font match', (done) => {
+		it('should get exact font match', async () => {
 			const list = new GoogleFontList();
 			list.data = [
 				new GoogleFont({ family: 'Roboto' }),
 				new GoogleFont({ family: 'Roboto Mono' })
 			];
-			
-			list.getFont('Roboto', 'family', (err, result) => {
-				expect(err).toBeNull();
-				expect(result.data.length).toBe(1);
-				expect(result.data[0].getFamily()).toBe('Roboto');
-				done();
+
+			await new Promise((resolve) => {
+				list.getFont('Roboto', 'family', (err, result) => {
+					expect(err).toBeNull();
+					expect(result.data.length).toBe(1);
+					expect(result.data[0].getFamily()).toBe('Roboto');
+					resolve();
+				});
 			});
 		});
 
-		it('should be case insensitive', (done) => {
+		it('should be case insensitive', async () => {
 			const list = new GoogleFontList();
 			list.data = [new GoogleFont({ family: 'Roboto' })];
-			
-			list.getFont('roboto', 'family', (err, result) => {
-				expect(err).toBeNull();
-				expect(result.data.length).toBe(1);
-				expect(result.data[0].getFamily()).toBe('Roboto');
-				done();
+
+			await new Promise((resolve) => {
+				list.getFont('roboto', 'family', (err, result) => {
+					expect(err).toBeNull();
+					expect(result.data.length).toBe(1);
+					expect(result.data[0].getFamily()).toBe('Roboto');
+					resolve();
+				});
 			});
 		});
 
-		it('should return empty for partial matches', (done) => {
+		it('should return empty for partial matches', async () => {
 			const list = new GoogleFontList();
 			list.data = [new GoogleFont({ family: 'Roboto' })];
-			
-			list.getFont('Rob', 'family', (err, result) => {
-				expect(err).toBeNull();
-				expect(result.data.length).toBe(0);
-				done();
+
+			await new Promise((resolve) => {
+				list.getFont('Rob', 'family', (err, result) => {
+					expect(err).toBeNull();
+					expect(result.data.length).toBe(0);
+					resolve();
+				});
 			});
 		});
 	});
 
 	describe('getFontByName', () => {
-		it('should get font by exact name', (done) => {
+		it('should get font by exact name', async () => {
 			const list = new GoogleFontList();
 			list.data = [
 				new GoogleFont({ family: 'Inter' }),
 				new GoogleFont({ family: 'Inter Tight' })
 			];
-			
-			list.getFontByName('Inter', (err, result) => {
-				expect(err).toBeNull();
-				expect(result.data.length).toBe(1);
-				expect(result.data[0].getFamily()).toBe('Inter');
-				done();
+
+			await new Promise((resolve) => {
+				list.getFontByName('Inter', (err, result) => {
+					expect(err).toBeNull();
+					expect(result.data.length).toBe(1);
+					expect(result.data[0].getFamily()).toBe('Inter');
+					resolve();
+				});
 			});
 		});
 	});
 
 	describe('getFontByType', () => {
-		it('should get fonts by exact category', (done) => {
+		it('should get fonts by exact category', async () => {
 			const list = new GoogleFontList();
 			list.data = [
 				new GoogleFont({ family: 'Roboto', category: 'sans-serif' }),
 				new GoogleFont({ family: 'Courier', category: 'monospace' })
 			];
-			
-			list.getFontByType('monospace', (err, result) => {
-				expect(err).toBeNull();
-				expect(result.data.length).toBe(1);
-				done();
+
+			await new Promise((resolve) => {
+				list.getFontByType('monospace', (err, result) => {
+					expect(err).toBeNull();
+					expect(result.data.length).toBe(1);
+					resolve();
+				});
 			});
 		});
 	});
@@ -439,12 +479,14 @@ describe('GoogleFontList', () => {
 			expect(indices).toEqual([0, 1]);
 		});
 
-		it('should call callback after iteration', (done) => {
+		it('should call callback after iteration', async () => {
 			const list = new GoogleFontList();
 			list.data = [new GoogleFont({ family: 'Test' })];
-			
-			list.forEachFont(() => {}, () => {
-				done();
+
+			await new Promise((resolve) => {
+				list.forEachFont(() => {}, () => {
+					resolve();
+				});
 			});
 		});
 

@@ -1,33 +1,44 @@
 'use strict';
 
 const EventEmitter = require('events').EventEmitter;
+const proxyquire = require('proxyquire');
 
-jest.mock('../lib/case', () => ({
-	toPascalCase: jest.fn(async (value) => value.replace(/[^a-z0-9]+/gi, ' ').trim().split(/\s+/).map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(''))
+const RequestMock = vi.hoisted(() => vi.fn());
+const systemFontMock = vi.hoisted(() => ({
+	install: vi.fn(),
+	saveAt: vi.fn()
 }));
+const toPascalCaseMock = vi.hoisted(() =>
+	vi.fn(async (value) =>
+		value
+			.replace(/[^a-z0-9]+/gi, ' ')
+			.trim()
+			.split(/\s+/)
+			.map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+			.join('')
+	)
+);
 
-jest.mock('../lib/request');
-jest.mock('../lib/system-font', () => ({
-	install: jest.fn(),
-	saveAt: jest.fn()
-}));
-
-const GoogleFont = require('../lib/google-font');
-const Request = require('../lib/request');
-const systemFont = require('../lib/system-font');
-const { toPascalCase } = require('../lib/case');
+const GoogleFont = proxyquire('../lib/google-font', {
+	'./request': RequestMock,
+	'./system-font': systemFontMock,
+	'./case': { toPascalCase: toPascalCaseMock }
+});
 
 describe('GoogleFont', () => {
 	let pendingRequests;
 
 	beforeEach(() => {
-		jest.clearAllMocks();
 		pendingRequests = [];
-		Request.mockImplementation(() => {
+		RequestMock.mockImplementation(function MockRequest() {
 			const emitter = new EventEmitter();
 			pendingRequests.push(emitter);
 			return emitter;
 		});
+		RequestMock.mockClear();
+		systemFontMock.install.mockClear();
+		systemFontMock.saveAt.mockClear();
+		toPascalCaseMock.mockClear();
 	});
 
 	describe('constructor and getters', () => {
@@ -67,7 +78,7 @@ describe('GoogleFont', () => {
 			const font = new GoogleFont({ family: 'Roboto' });
 			const promise = font._getFileMapAsync('ttf');
 
-			expect(Request).toHaveBeenCalledWith('https://gwfh.mranftl.com/api/fonts/roboto', {
+			expect(RequestMock).toHaveBeenCalledWith('https://gwfh.mranftl.com/api/fonts/roboto', {
 				responseType: 'text',
 				maxBytes: 5 * 1024 * 1024
 			});
@@ -131,7 +142,7 @@ describe('GoogleFont', () => {
 	describe('filename generation and save/install flows', () => {
 		it('uses PascalCase filenames for installAsync', async () => {
 			const font = new GoogleFont({ family: 'Open Sans' });
-			systemFont.install.mockResolvedValue('/fonts/OpenSans-regular.ttf');
+			systemFontMock.install.mockResolvedValue('/fonts/OpenSans-regular.ttf');
 
 			const promise = font.installAsync(['regular']);
 			pendingRequests[0].emit('success', JSON.stringify({
@@ -141,13 +152,13 @@ describe('GoogleFont', () => {
 			await expect(promise).resolves.toEqual([
 				{ family: 'Open Sans', variant: 'regular', path: '/fonts/OpenSans-regular.ttf' }
 			]);
-			expect(toPascalCase).toHaveBeenCalledWith('Open Sans');
-			expect(systemFont.install).toHaveBeenCalledWith('https://cdn.example.com/open-sans-regular.ttf', 'OpenSans-regular');
+			expect(toPascalCaseMock).toHaveBeenCalledWith('Open Sans');
+			expect(systemFontMock.install).toHaveBeenCalledWith('https://cdn.example.com/open-sans-regular.ttf', 'OpenSans-regular');
 		});
 
 		it('uses PascalCase filenames for saveAtAsync', async () => {
 			const font = new GoogleFont({ family: 'Roboto Mono' });
-			systemFont.saveAt.mockResolvedValue('/fonts/RobotoMono-regular.woff2');
+			systemFontMock.saveAt.mockResolvedValue('/fonts/RobotoMono-regular.woff2');
 
 			const promise = font.saveAtAsync(['regular'], '/fonts', 'woff2');
 			pendingRequests[0].emit('success', JSON.stringify({
@@ -157,13 +168,13 @@ describe('GoogleFont', () => {
 			await expect(promise).resolves.toEqual([
 				{ family: 'Roboto Mono', variant: 'regular', path: '/fonts/RobotoMono-regular.woff2' }
 			]);
-			expect(toPascalCase).toHaveBeenCalledWith('Roboto Mono');
-			expect(systemFont.saveAt).toHaveBeenCalledWith('https://cdn.example.com/roboto-mono-regular.woff2', '/fonts', 'RobotoMono-regular');
+			expect(toPascalCaseMock).toHaveBeenCalledWith('Roboto Mono');
+			expect(systemFontMock.saveAt).toHaveBeenCalledWith('https://cdn.example.com/roboto-mono-regular.woff2', '/fonts', 'RobotoMono-regular');
 		});
 
 		it('preserves readable output for punctuation-heavy names', async () => {
 			const font = new GoogleFont({ family: 'Noto Sans JP' });
-			systemFont.saveAt.mockResolvedValue('/fonts/NotoSansJP-regular.ttf');
+			systemFontMock.saveAt.mockResolvedValue('/fonts/NotoSansJP-regular.ttf');
 
 			const promise = font.saveAtAsync(['regular'], '/fonts', 'ttf');
 			pendingRequests[0].emit('success', JSON.stringify({
@@ -171,12 +182,12 @@ describe('GoogleFont', () => {
 			}));
 
 			await promise;
-			expect(systemFont.saveAt).toHaveBeenCalledWith('https://cdn.example.com/noto-sans-jp-regular.ttf', '/fonts', 'NotoSansJP-regular');
+			expect(systemFontMock.saveAt).toHaveBeenCalledWith('https://cdn.example.com/noto-sans-jp-regular.ttf', '/fonts', 'NotoSansJP-regular');
 		});
 
 		it('collects partial save results and throws AggregateError for failures', async () => {
 			const font = new GoogleFont({ family: 'Inter' });
-			systemFont.saveAt
+			systemFontMock.saveAt
 				.mockResolvedValueOnce('/fonts/Inter-regular.ttf')
 				.mockRejectedValueOnce(new Error('disk full'));
 
@@ -198,14 +209,14 @@ describe('GoogleFont', () => {
 	describe('callback wrappers', () => {
 		it('supports install callback style', () => {
 			const font = new GoogleFont({ family: 'Roboto' });
-			font.installAsync = jest.fn().mockResolvedValue([]);
+			font.installAsync = vi.fn().mockResolvedValue([]);
 
 			expect(() => font.install(['regular'], () => {})).not.toThrow();
 		});
 
 		it('supports saveAt callback style', () => {
 			const font = new GoogleFont({ family: 'Roboto' });
-			font.saveAtAsync = jest.fn().mockResolvedValue([]);
+			font.saveAtAsync = vi.fn().mockResolvedValue([]);
 
 			expect(() => font.saveAt(['regular'], '/tmp', 'ttf', () => {})).not.toThrow();
 			expect(() => font.saveAt(['regular'], '/tmp', () => {})).not.toThrow();

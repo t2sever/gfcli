@@ -4,41 +4,42 @@ const path = require('path');
 const fs = require('fs');
 const fsPromises = fs.promises;
 const EventEmitter = require('events').EventEmitter;
+const proxyquire = require('proxyquire');
 
-jest.mock('../lib/request');
+const RequestMock = vi.hoisted(() => vi.fn());
+
+const systemFont = proxyquire('../lib/system-font', {
+	'./request': RequestMock
+});
 
 describe('SystemFont', () => {
-	let systemFont;
-	let Request;
 	let mockRequest;
 	let writeStream;
 
 	beforeEach(() => {
-		jest.resetModules();
-		jest.clearAllMocks();
-
 		writeStream = new EventEmitter();
-		writeStream.destroy = jest.fn();
+		writeStream.end = vi.fn();
+		writeStream.destroy = vi.fn();
 
 		mockRequest = new EventEmitter();
-		mockRequest.getMimeType = jest.fn().mockReturnValue({ mime: 'application/font-sfnt' });
-		mockRequest.pipe = jest.fn().mockReturnValue(writeStream);
+		mockRequest.getMimeType = vi.fn().mockReturnValue({ mime: 'application/font-sfnt' });
+		mockRequest.pipe = vi.fn().mockReturnValue(writeStream);
 
-		Request = require('../lib/request');
-		Request.mockImplementation(() => mockRequest);
+		RequestMock.mockImplementation(function MockRequest() {
+			return mockRequest;
+		});
+		RequestMock.mockClear();
 
-		jest.spyOn(fsPromises, 'mkdtemp').mockResolvedValue('/tmp/gfcli-12345');
-		jest.spyOn(fsPromises, 'mkdir').mockResolvedValue(undefined);
-		jest.spyOn(fsPromises, 'rename').mockResolvedValue(undefined);
-		jest.spyOn(fsPromises, 'rm').mockResolvedValue(undefined);
-		jest.spyOn(fsPromises, 'unlink').mockResolvedValue(undefined);
-		jest.spyOn(fs, 'createWriteStream').mockReturnValue(writeStream);
-
-		systemFont = require('../lib/system-font');
+		vi.spyOn(fsPromises, 'mkdtemp').mockResolvedValue('/tmp/gfcli-12345');
+		vi.spyOn(fsPromises, 'mkdir').mockResolvedValue(undefined);
+		vi.spyOn(fsPromises, 'rename').mockResolvedValue(undefined);
+		vi.spyOn(fsPromises, 'rm').mockResolvedValue(undefined);
+		vi.spyOn(fsPromises, 'unlink').mockResolvedValue(undefined);
+		vi.spyOn(fs, 'createWriteStream').mockReturnValue(writeStream);
 	});
 
 	afterEach(() => {
-		jest.restoreAllMocks();
+		vi.restoreAllMocks();
 	});
 
 	it('exports a SystemFont instance', () => {
@@ -69,7 +70,7 @@ describe('SystemFont', () => {
 
 		expect(fsPromises.mkdtemp).toHaveBeenCalledWith(path.join(require('os').tmpdir(), 'gfcli-'));
 		expect(fs.createWriteStream).toHaveBeenCalledWith('/tmp/gfcli-12345/TestFont.ttf');
-		expect(Request).toHaveBeenCalledWith('https://example.com/font.ttf', {
+		expect(RequestMock).toHaveBeenCalledWith('https://example.com/font.ttf', {
 			responseType: 'stream',
 			maxBytes: 50 * 1024 * 1024,
 			sniffBytes: 8192
@@ -109,7 +110,7 @@ describe('SystemFont', () => {
 	});
 
 	it('saveHere delegates to saveAt with false destination', async () => {
-		const saveAtSpy = jest.spyOn(systemFont, 'saveAt').mockResolvedValue('/tmp/font.ttf');
+		const saveAtSpy = vi.spyOn(systemFont, 'saveAt').mockResolvedValue('/tmp/font.ttf');
 		await systemFont.saveHere('https://example.com/font.ttf', 'TestFont');
 		expect(saveAtSpy).toHaveBeenCalledWith('https://example.com/font.ttf', false, 'TestFont');
 	});

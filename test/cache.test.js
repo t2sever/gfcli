@@ -16,7 +16,7 @@ describe('Cache', () => {
 
 	beforeEach(() => {
 		// Reset module cache to get fresh instance
-		jest.resetModules();
+		vi.resetModules();
 		Cache = require('../lib/cache');
 	});
 
@@ -41,14 +41,14 @@ describe('Cache', () => {
 	describe('readCache', () => {
 		it('should return null when cache file does not exist', async () => {
 			// Mock readFile to throw ENOENT error
-			jest.spyOn(fs, 'readFile').mockRejectedValue({ code: 'ENOENT' });
+			vi.spyOn(fs, 'readFile').mockRejectedValue({ code: 'ENOENT' });
 			
 			const result = await Cache.readCache();
 			expect(result).toBeNull();
 		});
 
 		it('should return null for invalid JSON', async () => {
-			jest.spyOn(fs, 'readFile').mockResolvedValue('invalid json');
+			vi.spyOn(fs, 'readFile').mockResolvedValue('invalid json');
 			
 			const result = await Cache.readCache();
 			expect(result).toBeNull();
@@ -59,7 +59,7 @@ describe('Cache', () => {
 				fetchedAt: Date.now(),
 				notFonts: []
 			};
-			jest.spyOn(fs, 'readFile').mockResolvedValue(JSON.stringify(cacheData));
+			vi.spyOn(fs, 'readFile').mockResolvedValue(JSON.stringify(cacheData));
 			
 			const result = await Cache.readCache();
 			expect(result).toBeNull();
@@ -69,7 +69,7 @@ describe('Cache', () => {
 			const cacheData = {
 				fonts: [{ family: 'Roboto' }]
 			};
-			jest.spyOn(fs, 'readFile').mockResolvedValue(JSON.stringify(cacheData));
+			vi.spyOn(fs, 'readFile').mockResolvedValue(JSON.stringify(cacheData));
 			
 			const result = await Cache.readCache();
 			expect(result).toBeNull();
@@ -80,7 +80,7 @@ describe('Cache', () => {
 				fetchedAt: Date.now() - (25 * 60 * 60 * 1000), // 25 hours ago
 				fonts: [{ family: 'Roboto' }]
 			};
-			jest.spyOn(fs, 'readFile').mockResolvedValue(JSON.stringify(cacheData));
+			vi.spyOn(fs, 'readFile').mockResolvedValue(JSON.stringify(cacheData));
 			
 			const result = await Cache.readCache();
 			expect(result).toBeNull();
@@ -92,7 +92,7 @@ describe('Cache', () => {
 				fetchedAt: Date.now() - (1 * 60 * 60 * 1000), // 1 hour ago
 				fonts: fonts
 			};
-			jest.spyOn(fs, 'readFile').mockResolvedValue(JSON.stringify(cacheData));
+			vi.spyOn(fs, 'readFile').mockResolvedValue(JSON.stringify(cacheData));
 			
 			const result = await Cache.readCache();
 			expect(result).toEqual(fonts);
@@ -104,7 +104,7 @@ describe('Cache', () => {
 				fetchedAt: Date.now() - (23 * 60 * 60 * 1000), // 23 hours ago
 				fonts: fonts
 			};
-			jest.spyOn(fs, 'readFile').mockResolvedValue(JSON.stringify(cacheData));
+			vi.spyOn(fs, 'readFile').mockResolvedValue(JSON.stringify(cacheData));
 			
 			const result = await Cache.readCache();
 			expect(result).toEqual(fonts);
@@ -113,8 +113,8 @@ describe('Cache', () => {
 
 	describe('writeCache', () => {
 		it('should create cache directory if not exists', async () => {
-			const mkdirSpy = jest.spyOn(fs, 'mkdir').mockResolvedValue(undefined);
-			jest.spyOn(fs, 'writeFile').mockResolvedValue(undefined);
+			const mkdirSpy = vi.spyOn(fs, 'mkdir').mockResolvedValue(undefined);
+			vi.spyOn(fs, 'writeFile').mockResolvedValue(undefined);
 
 			await Cache.writeCache([{ family: 'Test' }]);
 
@@ -123,9 +123,9 @@ describe('Cache', () => {
 
 		it('should write fonts with timestamp', async () => {
 			// Clear all mocks first
-			jest.restoreAllMocks();
-			const mkdirSpy = jest.spyOn(fs, 'mkdir').mockResolvedValue(undefined);
-			const writeFileSpy = jest.spyOn(fs, 'writeFile').mockResolvedValue(undefined);
+			vi.restoreAllMocks();
+			const mkdirSpy = vi.spyOn(fs, 'mkdir').mockResolvedValue(undefined);
+			const writeFileSpy = vi.spyOn(fs, 'writeFile').mockResolvedValue(undefined);
 			const fonts = [{ family: 'Roboto' }];
 
 			const beforeWrite = Date.now();
@@ -150,16 +150,16 @@ describe('Cache', () => {
 		});
 
 		it('should not throw on mkdir error', async () => {
-			jest.spyOn(fs, 'mkdir').mockRejectedValue(new Error('mkdir failed'));
-			jest.spyOn(fs, 'writeFile').mockResolvedValue(undefined);
+			vi.spyOn(fs, 'mkdir').mockRejectedValue(new Error('mkdir failed'));
+			vi.spyOn(fs, 'writeFile').mockResolvedValue(undefined);
 
 			// Should not throw
 			await expect(Cache.writeCache([{ family: 'Test' }])).resolves.not.toThrow();
 		});
 
 		it('should not throw on writeFile error', async () => {
-			jest.spyOn(fs, 'mkdir').mockResolvedValue(undefined);
-			jest.spyOn(fs, 'writeFile').mockRejectedValue(new Error('write failed'));
+			vi.spyOn(fs, 'mkdir').mockResolvedValue(undefined);
+			vi.spyOn(fs, 'writeFile').mockRejectedValue(new Error('write failed'));
 
 			// Should not throw
 			await expect(Cache.writeCache([{ family: 'Test' }])).resolves.not.toThrow();

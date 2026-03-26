@@ -37,7 +37,7 @@ jobs:
           mkdir -p -v ~/Library/Fonts
 
       - name: Run tests
-        run: npm test -- --runInBand
+        run: npm test
 
   release:
     needs: test

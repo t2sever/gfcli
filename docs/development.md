@@ -23,7 +23,7 @@ To set up the project for development:
 
 ## Testing
 
-We use [Jest](https://jestjs.io/) for unit testing.
+We use [Vitest](https://vitest.dev/) for unit testing.
 
 To run the tests:
 ```bash
@@ -32,7 +32,7 @@ npm test
 
 To run tests with coverage:
 ```bash
-npm test -- --coverage
+npm run test:coverage
 ```
 
 ## Contributing
