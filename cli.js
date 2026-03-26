@@ -201,6 +201,63 @@ program
   });
 
 program
+  .command("remove <family...>")
+  .description("Remove installed Google Font files from the system")
+  .option("-v, --variants <variants>", "Variants separated by comma")
+  .action(async (family, options) => {
+    const refresh = program.opts().refreshCache;
+    const variants = options.variants ? options.variants.split(",") : false;
+    const families = splitFamilies(family);
+
+    try {
+      await ensureFontsLoaded(refresh);
+      /** @type {FontResult[]} */
+      let allResults = [];
+      let successCount = 0;
+      let failCount = 0;
+
+      for (const term of families) {
+        try {
+          const filteredList = await getFontByNameAsync(term);
+          if (filteredList.data.length !== 1) {
+            handleMatchError("Removal", term, null);
+            failCount++;
+            continue;
+          }
+          const font = filteredList.getFirst();
+          if (!font) {
+            handleMatchError("Removal", term, null);
+            failCount++;
+            continue;
+          }
+          const result = await font.uninstallAsync(variants);
+          allResults = allResults.concat(result);
+          successCount++;
+        } catch (err) {
+          handleMatchError("Removal", term, /** @type {Error} */ (err));
+          failCount++;
+        }
+      }
+
+      if (allResults.length > 0) {
+        printResult(null, allResults);
+      }
+
+      if (failCount > 0 && successCount === 0) {
+        console.error(pc.red(pc.bold(`\nAll ${failCount} font removal(s) failed.`)));
+        process.exit(1);
+      }
+
+      if (failCount > 0 && successCount > 0) {
+        console.log(pc.yellow(`\n${successCount} font(s) removed successfully, ${failCount} failed.`));
+      }
+    } catch (err) {
+      console.error(pc.red(/** @type {Error} */ (err).toString()));
+      process.exit(1);
+    }
+  });
+
+program
   .command("copy <family...>")
   .description("Copy Google Fonts stylesheet link to clipboard")
   .option("-v, --variants <variants>", "Variants separated by comma")

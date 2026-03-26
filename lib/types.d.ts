@@ -131,6 +131,7 @@ export interface GoogleFontInstance extends FontData {
   _getFileMapAsync(format?: FontFormat): Promise<Record<string, string>>;
   install(variants?: string[] | false, callback?: FontResultCallback): void;
   installAsync(variants?: string[] | false): Promise<FontResult[]>;
+  uninstallAsync(variants?: string[] | false): Promise<FontResult[]>;
   saveAt(variants?: string[] | false, destFolder?: string, format?: FontFormat | FontResultCallback, callback?: FontResultCallback): void;
   saveAtAsync(variants?: string[] | false, destFolder?: string, format?: FontFormat): Promise<FontResult[]>;
   _normalizeVariant(variant: string): string;
