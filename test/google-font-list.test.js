@@ -142,6 +142,20 @@ describe('GoogleFontList', () => {
 
 			expect(cloned.data).toBe(list.data);
 		});
+
+		it('should not trigger load when cloning (skipInitialLoad)', () => {
+			const loadSpy = jest.spyOn(GoogleFontList.prototype, 'load');
+			try {
+				const list = new GoogleFontList({ skipInitialLoad: true });
+				list.data = [new GoogleFont({ family: 'Test' })];
+				list.loaded = true;
+				const cloned = list.clone();
+				expect(loadSpy).not.toHaveBeenCalled();
+				expect(cloned.loaded).toBe(true);
+			} finally {
+				loadSpy.mockRestore();
+			}
+		});
 	});
 
 	describe('searchFont', () => {
