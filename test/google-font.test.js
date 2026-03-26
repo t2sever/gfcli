@@ -109,6 +109,15 @@ describe('GoogleFont', () => {
 			await expect(promise).rejects.toThrow('Failed to parse GWFH JSON response');
 		});
 
+		it('fails when variants is missing or not an array', async () => {
+			const font = new GoogleFont({ family: 'Roboto' });
+			const promise = font._getFileMapAsync('ttf');
+
+			pendingRequests[0].emit('success', JSON.stringify({}));
+
+			await expect(promise).rejects.toThrow('Invalid GWFH response: expected variants array');
+		});
+
 		it('propagates request errors', async () => {
 			const font = new GoogleFont({ family: 'Roboto' });
 			const promise = font._getFileMapAsync('ttf');
