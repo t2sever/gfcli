@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project aims to follow Semantic Versioning.
 
+## [3.2.0] - 2026-05-25
+
+### Added
+
+- Added a cached npm update notification that checks for newer `google-font-cli` releases and can be disabled with `--no-update-notifier`, `GFCLI_NO_UPDATE_NOTIFIER`, or `NO_UPDATE_NOTIFIER`.
+
+### Fixed
+
+- Set the loaded flag and replace existing data when populating font lists.
+- Prevent filtered `GoogleFontList` clones from triggering an initial background load.
+- Validate single-font GWFH API payloads before parsing font variants.
+- Hardened GitHub Actions workflow token permissions.
+
+### Changed
+
+- Migrated the test runner from Jest to Vitest.
+- Removed unused UI dependencies.
+- Refreshed development dependencies and release workflow dependencies.
+- Updated README badges and development documentation.
+
 ## [3.1.1] - 2026-03-20
 
 ### Changes
