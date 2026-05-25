@@ -13,6 +13,7 @@ const { Command } = require("commander");
 const pc = require("picocolors");
 const ncp = require("copy-paste-win32fix");
 const GoogleFontList = require("./lib/google-font-list");
+const UpdateNotifier = require("./lib/update-notifier");
 const pjson = require("./package.json");
 
 /** @type {any} */
@@ -20,6 +21,7 @@ const fontList = new GoogleFontList();
 const program = new Command();
 
 program.option("--refresh-cache", "Refresh the cached Google font list");
+program.option("--no-update-notifier", "Disable the npm update notification");
 
 /**
  * Split comma-separated font family arguments into an array
@@ -66,17 +68,51 @@ const ensureFontsLoaded = async (refreshCache = false) => {
   }
 };
 
+/**
+ * Check npm for a newer version and print a notification when available.
+ * @returns {Promise<void>}
+ */
+const notifyIfUpdateAvailable = async () => {
+  if (!program.opts().updateNotifier || process.env.GFCLI_NO_UPDATE_NOTIFIER || process.env.NO_UPDATE_NOTIFIER) {
+    return;
+  }
+
+  try {
+    const update = await UpdateNotifier.checkForUpdate(pjson.name, pjson.version);
+    if (!update || !update.updateAvailable) return;
+
+    console.log(
+      pc.yellow(
+        `\nUpdate available: ${pc.bold(update.currentVersion)} -> ${pc.bold(update.latestVersion)}\n` +
+          `Run ${pc.bold(`npm install -g ${pjson.name}`)} to update.\n`
+      )
+    );
+  } catch (err) {
+    // Update checks are best-effort and should never block normal CLI usage.
+  }
+};
+
+/**
+ * Run a command after the best-effort update notification.
+ * @param {(...args: any[]) => Promise<void>} action
+ * @returns {(...args: any[]) => Promise<void>}
+ */
+const withUpdateNotification = (action) => async (...args) => {
+  await notifyIfUpdateAvailable();
+  return action(...args);
+};
+
 program.version(pjson.version);
 
 program
   .command("search [family...]")
   .description("Search for a font family")
-  .action(async (family) => {
+  .action(withUpdateNotification(async (family) => {
     const refresh = program.opts().refreshCache;
     await ensureFontsLoaded(refresh);
     const term = family ? family.join(" ") : "";
     fontList.searchFontByName(term, printFontList);
-  });
+  }));
 
 program
   .command("download <family...>")
@@ -85,7 +121,7 @@ program
   .option("-v, --variants <variants>", "Variants separated by comma")
   .option("--ttf", "Download TTF format (default)")
   .option("--woff2", "Download WOFF2 format")
-  .action(async (family, options) => {
+  .action(withUpdateNotification(async (family, options) => {
     const refresh = program.opts().refreshCache;
     const variants = options.variants ? options.variants.split(",") : false;
     const format = options.woff2 ? "woff2" : "ttf";
@@ -139,13 +175,13 @@ program
       console.error(pc.red(/** @type {Error} */ (err).toString()));
       process.exit(1);
     }
-  });
+  }));
 
 program
   .command("install <family...>")
   .description("Install a font family to the system")
   .option("-v, --variants <variants>", "Variants separated by comma")
-  .action(async (family, options) => {
+  .action(withUpdateNotification(async (family, options) => {
     const refresh = program.opts().refreshCache;
     const variants = options.variants ? options.variants.split(",") : false;
     const families = splitFamilies(family);
@@ -198,13 +234,13 @@ program
       console.error(pc.red(/** @type {Error} */ (err).toString()));
       process.exit(1);
     }
-  });
+  }));
 
 program
   .command("copy <family...>")
   .description("Copy Google Fonts stylesheet link to clipboard")
   .option("-v, --variants <variants>", "Variants separated by comma")
-  .action(async (family, options) => {
+  .action(withUpdateNotification(async (family, options) => {
     const refresh = program.opts().refreshCache;
     await ensureFontsLoaded(refresh);
     const term = family.join(" ");
@@ -225,7 +261,7 @@ program
         console.log(pc.green(`"${term}" CSS URL copied to clipboard.`));
       });
     });
-  });
+  }));
 
 program.parse(process.argv);
 

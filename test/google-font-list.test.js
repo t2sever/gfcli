@@ -110,7 +110,7 @@ describe('GoogleFontList', () => {
 
 	describe('populate', () => {
 		it('should populate data with GoogleFont instances', async () => {
-			const list = new GoogleFontList();
+			const list = new GoogleFontList({ skipInitialLoad: true });
 			await new Promise((resolve) => {
 				list.on('success', () => {
 					expect(list.data.length).toBe(2);
@@ -126,7 +126,7 @@ describe('GoogleFontList', () => {
 		});
 
 		it('should emit success event', async () => {
-			const list = new GoogleFontList();
+			const list = new GoogleFontList({ skipInitialLoad: true });
 			await new Promise((resolve) => {
 				list.on('success', (result) => {
 					expect(result).toBe(list);
