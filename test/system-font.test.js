@@ -129,6 +129,7 @@ describe('SystemFont', () => {
 
 	it('_isValidFontFile enforces MIME and extension rules', () => {
 		expect(systemFont._isValidFontFile({ mime: 'application/font-sfnt' }, '.ttf')).toBe(true);
+		expect(systemFont._isValidFontFile({ mime: 'font/ttf' }, '.ttf')).toBe(true);
 		expect(systemFont._isValidFontFile({ mime: 'font/woff2' }, '.woff2')).toBe(true);
 		expect(systemFont._isValidFontFile({ mime: 'font/woff2' }, '.ttf')).toBe(false);
 		expect(systemFont._isValidFontFile(undefined, '.ttf')).toBe(true);
