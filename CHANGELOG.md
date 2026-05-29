@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project aims to follow Semantic Versioning.
 
+## [3.2.1] - 2026-05-29
+
+### Fixed
+
+- Accept `font/ttf` and `font/sfnt` MIME types when validating downloaded TTF files, fixing installs broken by `file-type` v21 detection changes.
+
 ## [3.2.0] - 2026-05-25
 
 ### Added
