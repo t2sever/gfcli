@@ -29,9 +29,11 @@ updates:
         update-types:
           - "minor"
           - "patch"
-    # Pin packages that have incompatible major versions
+    # Keep Node.js 20 support until the next planned runtime-major release.
     ignore:
-      - dependency-name: "pascal-case"
+      - dependency-name: "commander"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "file-type"
         update-types: ["version-update:semver-major"]
     
   # Enable version updates for GitHub Actions

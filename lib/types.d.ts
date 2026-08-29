@@ -199,6 +199,7 @@ export interface RequestInstance {
  */
 export interface SystemFontInstance {
   _saveTmp(remoteFile: string, fileName: string): Promise<string>;
+  _sanitizeFileName(fileName: string): string;
   _move(oldPath: string, destFolder: string): Promise<string>;
   _checkDestFolder(destFolder?: string | null | false): Promise<string>;
   _isFolderOk(folder: string): Promise<void>;

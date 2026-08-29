@@ -62,6 +62,12 @@ describe('SystemFont', () => {
 		await expect(systemFont._saveTmp('', 'TestFont')).rejects.toThrow('Nothing to download');
 	});
 
+	it('_sanitizeFileName blocks path traversal and command metacharacters', () => {
+		expect(systemFont._sanitizeFileName('../../evil"; Remove-Item')).toBe('evil-Remove-Item');
+		expect(systemFont._sanitizeFileName('NotoSansJP-700')).toBe('NotoSansJP-700');
+		expect(systemFont._sanitizeFileName('')).toBe('font');
+	});
+
 	it('_saveTmp creates a unique temp directory and configures a secure Request', async () => {
 		const savePromise = systemFont._saveTmp('https://example.com/font.ttf', 'TestFont');
 		await new Promise((resolve) => setImmediate(resolve));

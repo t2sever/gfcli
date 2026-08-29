@@ -28,6 +28,7 @@ describe('Update notifier', () => {
 	it('builds npm registry URLs safely', () => {
 		expect(UpdateNotifier.getRegistryUrl('google-font-cli')).toBe('https://registry.npmjs.org/google-font-cli');
 		expect(UpdateNotifier.getRegistryUrl('@scope/pkg')).toBe('https://registry.npmjs.org/@scope%2Fpkg');
+		expect(UpdateNotifier.getRegistryUrl('@scope/@pkg')).toBe('https://registry.npmjs.org/@scope%2F@pkg');
 	});
 
 	it('returns cached update data when fresh', async () => {
